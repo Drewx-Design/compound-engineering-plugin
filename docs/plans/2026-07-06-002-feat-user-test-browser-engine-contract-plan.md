@@ -1,7 +1,7 @@
 ---
 title: "feat: ce-user-test tool-neutral browser engine contract with agent-browser default"
 type: feat
-status: active
+status: completed
 date: 2026-07-06
 topic: user-test-browser-engine-contract
 artifact_readiness: implementation-ready
