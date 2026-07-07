@@ -1,14 +1,15 @@
 ---
 name: ce-user-test
-description: Run browser-based user testing via claude-in-chrome MCP with quality scoring and compounding test files. Use when testing app quality, scoring interactions, tracking test maturity, or filing issues from test sessions.
+description: Run browser-based user testing on the agent-browser engine by default, with opt-in watchable Chrome, quality scoring, and compounding test files. Use when testing app quality, scoring interactions, tracking test maturity, or filing issues from test sessions.
 argument-hint: "[scenario-file-or-description]"
 ---
 
 # User Test
 
-Exploratory testing in a visible Chrome window. The user watches the test
-happening in real-time and can intervene if needed. Claude shares the browser's
-login state — sign into the app in Chrome before running.
+Exploratory browser-based user testing uses the agent-browser engine by default
+(headless CLI). A visible shared-login Chrome window is opt-in via
+`engine: chrome` in test-file frontmatter or an explicit Chrome request at
+invocation time.
 
 For automated headless regression testing, use `/ce-test-browser` instead.
 
@@ -31,8 +32,8 @@ protected from cleanup even though they are gitignored.
 
 ## Phase 0: Preflight
 
-1. **Chrome MCP check — deferred to Phase 2.** Phase 1 CLI discovery may eliminate browser testing.
-2. **Detect WSL:** Run `uname -r 2>/dev/null | grep -qi microsoft`. If WSL: abort with "Chrome integration not supported in WSL."
+1. **Browser engine check — deferred to Phase 2.** Phase 1 CLI discovery may eliminate browser testing.
+2. **Detect WSL:** Run `uname -r 2>/dev/null | grep -qi microsoft`. If WSL: route to the agent-browser engine in Phase 2; WSL is not an abort condition.
 3. **Check python3:** Run `python3 --version`. If unavailable, abort with "python3 is required for ce-user-test scripts. Install Python 3, then rerun `/ce-user-test`."
 4. **Check gh CLI:** Run `gh auth status`. If not authenticated: note "gh not authenticated — issue creation skipped in commit mode."
 5. **Validate app URL:** If test file contains `app_url`, verify reachable. Site permission errors handled reactively during execution.
@@ -73,23 +74,24 @@ protected from cleanup even though they are gitignored.
 
 ## Phase 2: Setup
 
-0. **Check claude-in-chrome MCP:** Call any `mcp__claude-in-chrome__*` tool. If NOT available: check if `cli_test_command` covers all `scored_output` areas. If yes, offer "All areas have CLI coverage — run CLI-only? (y/n)" and proceed without browser. If CLI doesn't cover all areas: display "claude-in-chrome not connected. Run `/chrome` or restart with `claude --chrome`" and abort.
-1. **Environment sanity check:**
-   - Navigate to the app URL using `mcp__claude-in-chrome__navigate`
+0. **Select browser engine:** Read [browser-engines.md](./references/browser-engines.md) now and apply its Phase 2 engine selection contract; do not inline or approximate it. That file owns default agent-browser selection, Chrome opt-in (`engine: chrome` or invocation request) with MCP verify/re-verify prompting, agent-browser smoke-test fallback offers, the preserved CLI-only offer, and `/ce-setup` stop conditions.
+1. **Environment sanity check and engine smoke test:**
+   - Navigate to the app URL using the selected engine's `navigate` verb
    - Verify the page loaded with expected content (not an error page, stale auth redirect, or empty state)
+   - On a browser tool failure, apply replay-before-blame per [browser-engines.md](./references/browser-engines.md) before attributing the failure to the app
    - If error banners, API failures, or empty data detected: abort with "App environment issue detected — fix the app state before testing"
 2. **Authentication check:**
-   - Claude shares the browser's login state — no credential handling needed
-   - If a login page or CAPTCHA is encountered: pause and instruct "Sign in to your app in Chrome, then press Enter to continue"
+   - Do not put credentials in the test file or report
+   - If a login page or CAPTCHA is encountered: read [browser-engines.md](./references/browser-engines.md) and apply the selected engine's login/session handling
 3. **Baseline screenshot:**
-   - Take a screenshot of the app's initial state for reference
+   - Take a screenshot of the app's initial state for reference using the `screenshot` verb
 
 ## Phase 2.5: CLI Testing (Optional)
 
 If the test file defines `cli_test_command` in frontmatter, run CLI queries before browser testing. CLI mode catches agent reasoning errors without browser overhead.
 
 **When `cli_test_command` is present:**
-1. Phase 0 runs `gh auth status` only (Chrome MCP deferred). Skip Phase 2 browser setup unless browser areas exist.
+1. Phase 0 runs `gh auth status` only (browser engine selection deferred). Skip Phase 2 browser setup unless browser areas exist.
 2. Run each `scored_output` area's Queries through `cli_test_command`. Run `cli_queries` via Bash. Score 1-5 using output quality rubric (semantic evaluation). See CLI Area Queries in [queries-and-multiturn.md](./references/queries-and-multiturn.md).
 3. **Browser area overlap:** If a `prechecks`-tagged CLI query scores ≤ 2, skip the tagged browser area. No `prechecks` tag = standalone.
 4. Credentials: shell environment only. No credentials in the test file.
@@ -100,10 +102,11 @@ If the test file defines `cli_test_command` in frontmatter, run CLI queries befo
 ## Phase 3: Execute
 
 Immediately before the first Phase 3 action, read [anomaly-ledger.md](./references/anomaly-ledger.md) and reset/open the ledger for this run.
+Before issuing browser actions, read [browser-engines.md](./references/browser-engines.md) for the selected engine's verb map. Use tool-neutral browser verbs (`navigate`, `read-page`, `evaluate`, `screenshot`, `click`, `fill`, `find`, `wait`) and dispatch them through the selected engine.
 
 Test areas based on maturity status. The agent exercises judgment on area selection — these are guidelines, not rigid rules. Record a `skip_reason` for each area not fully tested (see [test-file-template.md](./references/test-file-template.md) for enum values).
 
-**Run focus vs. area budget:** A run focus (e.g., "consumer stress test", "search bar exploration") controls WHAT you test within each area — which queries, which edge cases, which user personas. It does NOT override maturity-based time allocation (see override priority table in [run-targeting.md](./references/run-targeting.md)). Proven areas get a tiered MCP budget based on consecutive pass count (see [run-targeting.md](./references/run-targeting.md) for budget table). The run focus shapes WHAT those calls test (search bar instead of basic navigation), not the count.
+**Run focus vs. area budget:** A run focus (e.g., "consumer stress test", "search bar exploration") controls WHAT you test within each area — which queries, which edge cases, which user personas. It does NOT override maturity-based time allocation (see override priority table in [run-targeting.md](./references/run-targeting.md)). Proven areas get a tiered browser call budget based on consecutive pass count (see [run-targeting.md](./references/run-targeting.md) for budget table). The run focus shapes WHAT those calls test (search bar instead of basic navigation), not the count.
 
 ### Per-Area Checklist (run in order for every area)
 
@@ -111,10 +114,10 @@ Test areas based on maturity status. The agent exercises judgment on area select
 0b. **Adversarial mode** — if `adversarial_browser: true` (from Phase 2.5): skip happy path, front-load competing-constraint queries, generate pre-emptive P1 probe, increase novelty budget. SKIP areas promoted to PROBES-ONLY. See [queries-and-multiturn.md](./references/queries-and-multiturn.md) CLI Adversarial Mode.
 1. **Run probes** — failing/untested first. See [probes.md](./references/probes.md).
 2. **Execute Queries and Multi-turn** — if defined. See [queries-and-multiturn.md](./references/queries-and-multiturn.md).
-3. **Novelty budget — MANDATORY.** Before generating novel interactions, check `novelty_fingerprints` from `.user-test-last-run.json` — skip interactions matching existing fingerprints. At least 1 novel interaction per `scored_output` area must generate a probe. Iterate mode ignores fingerprints. See [queries-and-multiturn.md](./references/queries-and-multiturn.md) for fingerprint matching, MCP budget, and mandatory probe rule.
+3. **Novelty budget — MANDATORY.** Before generating novel interactions, check `novelty_fingerprints` from `.user-test-last-run.json` — skip interactions matching existing fingerprints. At least 1 novel interaction per `scored_output` area must generate a probe. Iterate mode ignores fingerprints. See [queries-and-multiturn.md](./references/queries-and-multiturn.md) for fingerprint matching, browser call budget, and mandatory probe rule.
 4. **Verification pass** — per area type. See [verification-patterns.md](./references/verification-patterns.md).
 5. **Score** — UX (1-5) + Quality if `scored_output: true`; collect typed evidence per score dimension and verify evidence minimums against final scores before the Phase 4 run-JSON write.
-6. **Time** — wall-clock seconds, first to last MCP call. Async waits count. Disconnect = `—`.
+6. **Time** — wall-clock seconds, first to last browser call. Async waits count. Disconnect = `—`.
 7. **Notes** — what surprised you? Feeds Explore Next Run + new Queries in commit.
 8. **Ledger append** — At the area transition, read [anomaly-ledger.md](./references/anomaly-ledger.md) and append the required batch before starting the next area.
 
@@ -126,7 +129,7 @@ Maintain a monotonically increasing `execution_index` counter (starting at 0) ac
 
 ### Probe Execution (Before Broad Exploration)
 
-Read probes from area `**Probes:**` tables. Execute `untested` and `failing` probes before broad exploration — these are the highest-signal checks. For Proven areas, failing/untested probes always run regardless of MCP budget; the tiered budget cap only constrains passing-probe spot-checks. Record each probe result with its `execution_index`. See [probes.md](./references/probes.md) for execution flow, lifecycle, and dedup rules.
+Read probes from area `**Probes:**` tables. Execute `untested` and `failing` probes before broad exploration — these are the highest-signal checks. For Proven areas, failing/untested probes always run regardless of browser call budget; the tiered budget cap only constrains passing-probe spot-checks. Record each probe result with its `execution_index`. See [probes.md](./references/probes.md) for execution flow, lifecycle, and dedup rules.
 
 ### Cross-Area Probes (Before Per-Area Testing)
 
@@ -145,7 +148,7 @@ After exploring each area, run structural verification checks based on area type
 See [run-targeting.md](./references/run-targeting.md) for full rules including
 git-aware targeting, progressive narrowing, and override priority.
 
-Quick reference: (0) Code-affected → full. (1) P1 Explore Next Run → full. (2) Uncharted → full. (3) Proven → spot-check (tiered MCP + failing probes). (4) Known-bug → check issue state:
+Quick reference: (0) Code-affected → full. (1) P1 Explore Next Run → full. (2) Uncharted → full. (3) Proven → spot-check (tiered browser call budget + failing probes). (4) Known-bug → check issue state:
   - `gh issue view` or check tracker — if closed/fixed, flip to Uncharted (verify the fix)
   - if open, spot-check the bug area (confirm still broken, note any change)
 (5) All Proven → spot-check all, suggest new areas.
@@ -153,16 +156,15 @@ Quick reference: (0) Code-affected → full. (1) P1 Explore Next Run → full. (
 ### Connection Resilience
 
 Read [browser-engines.md](./references/browser-engines.md) for engine selection, verb budgets, resilience, failover, and replay-before-blame rules.
+On a browser tool failure, apply replay-before-blame per [browser-engines.md](./references/browser-engines.md). On disconnect threshold, fail over per [browser-engines.md](./references/browser-engines.md).
 
 ### Modal Dialog Handling
 
-If MCP commands stop responding after triggering an action that may produce a dialog (`alert`, `confirm`, `prompt`): instruct the user to dismiss the dialog manually before continuing.
+If browser commands stop responding after an action that may have opened a JavaScript dialog, read [browser-engines.md](./references/browser-engines.md) and apply the selected engine's modal-dialog handling.
 
 ### Graceful Degradation
 
-- Screenshot fails: continue, note "screenshots unavailable" in report
-- `javascript_tool` fails: fall back to individual `find`/`click` calls
-- All MCP tools fail: abort with recovery instructions
+On `screenshot`, `evaluate`, or broader browser tool failure, read [browser-engines.md](./references/browser-engines.md) and apply its graceful-degradation and recovery rules before scoring the app.
 
 ## Phase 4: Score and Report
 
