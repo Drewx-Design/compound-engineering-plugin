@@ -524,6 +524,12 @@ describe("ce-user-test commit-engine.py validation", () => {
         }),
         code: "promotion_contradicts_evidence",
       },
+      {
+        payload: basePayload({
+          areas: [{ ...basePayload().areas[0], engine: "firefox" }],
+        }),
+        code: "engine_invalid",
+      },
     ]
 
     for (const item of cases) {

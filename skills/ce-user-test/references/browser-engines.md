@@ -32,7 +32,10 @@ ref refresh, or selector read needed to perform that verb counts inside the
 verb. This keeps budgets comparable across Chrome MCP and agent-browser.
 
 Chrome cannot automate file uploads through `<input type="file">`. Use
-agent-browser for upload steps.
+agent-browser for upload steps. Because engine atomicity forbids switching
+engines mid-area, an area containing an upload step must set
+`engine: agent-browser` in the test-file frontmatter rather than switching
+mid-run.
 
 ## Engine Selection
 
@@ -171,9 +174,10 @@ Replay-before-blame attributes a browser verb failure before recovery:
 5. If the known-good action fails, attribute the failure to the active engine
    connection and enter that engine's recovery path.
 
-The default known-good action outside journeys and cross-area probe sequences is
-`navigate` to `app_url`, followed by re-establishing the area context before
-resuming.
+When the test-file frontmatter sets a non-empty `known_good_action`, use it as
+the known-good action for that scenario. Otherwise the default known-good action
+outside journeys and cross-area probe sequences is `navigate` to `app_url`,
+followed by re-establishing the area context before resuming.
 
 During journeys and cross-area probe sequences, the default known-good action
 is a non-destructive current-tab read: `read-page`, or `evaluate` when the check
@@ -191,7 +195,9 @@ needs structured DOM state. If that read fails:
 Exemptions:
 
 - The known-good action itself is exempt from replay. Its failure routes
-  directly to connection attribution; do not start nested replay.
+  directly to connection attribution; do not start nested replay. During
+  journeys and cross-area probe sequences, the two-stage discriminator above
+  governs a known-good-read failure instead of this direct routing.
 - Screenshot failure keeps the existing graceful-degradation behavior: continue
   and note screenshots unavailable.
 - Evaluate failure keeps the existing graceful-degradation behavior:
@@ -214,6 +220,11 @@ On the first login wall in an interactive session:
 The login pause fires at most once per session. In headless or pipeline
 contexts where no user can sign in, mark auth-gated areas with
 `skip_reason: auth-blocked` instead of blocking.
+
+On the Chrome engine, session state is shared with the user's visible browser,
+so the user is usually already signed in. If a login wall still appears mid-run,
+pause once and instruct the user to sign in in the Chrome window, then continue
+after they confirm. The same once-per-session limit applies.
 
 A second login wall mid-run is a ledger anomaly. Record and disposition it
 through the anomaly ledger; never score it as area quality.
