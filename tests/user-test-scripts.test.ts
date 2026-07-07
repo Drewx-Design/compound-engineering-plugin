@@ -47,23 +47,28 @@ function withoutSchemaVersion(text: string): string {
   return text.replace(/^schema_version:\s*\d+\r?\n/m, "")
 }
 
+function withoutSchemaVersionAndEngine(text: string): string {
+  return withoutSchemaVersion(text).replace(/^engine:\s*""\r?\n/m, "")
+}
+
 function normalizeEol(text: string): string {
   return text.replace(/\r\n/g, "\n")
 }
 
 describe("ce-user-test migrate-test-file.py", () => {
-  test("migrates a v5 test file to v11 in one pass while retaining content", () => {
+  test("migrates a v5 test file to v12 in one pass while retaining content", () => {
     const file = tempFixture("v5.md")
     const result = run("migrate", file)
 
     expect(result.code).toBe(0)
-    expect(result.stdout.trim()).toBe("MIGRATED 5 -> 11")
+    expect(result.stdout.trim()).toBe("MIGRATED 5 -> 12")
     expect(result.stderr).toBe("")
 
     const migrated = read(file)
-    expect(migrated).toContain("schema_version: 11")
+    expect(migrated).toContain("schema_version: 12")
     expect(migrated).toContain("seams_read: false")
     expect(migrated).toContain('cli_test_command: ""')
+    expect(migrated).toContain('engine: ""')
     expect(migrated).toContain("mcp_restart_threshold: 15")
     expect(migrated).toContain("zip code validation still surprising")
     expect(migrated).toContain(
@@ -85,17 +90,18 @@ describe("ce-user-test migrate-test-file.py", () => {
     expect(migrated).toContain("## Journeys")
   })
 
-  test("migrates a v10 test file to v11 by changing only the version line", () => {
+  test("migrates a v10 test file to v12 by changing only version and engine frontmatter", () => {
     const file = tempFixture("v10.md")
     const before = read(file)
 
     const result = run("migrate", file)
 
     expect(result.code).toBe(0)
-    expect(result.stdout.trim()).toBe("MIGRATED 10 -> 11")
+    expect(result.stdout.trim()).toBe("MIGRATED 10 -> 12")
     const migrated = read(file)
-    expect(migrated).toContain("schema_version: 11")
-    expect(withoutSchemaVersion(migrated)).toBe(withoutSchemaVersion(before))
+    expect(migrated).toContain("schema_version: 12")
+    expect(migrated).toContain('engine: ""')
+    expect(withoutSchemaVersionAndEngine(migrated)).toBe(withoutSchemaVersion(before))
   })
 
   test("schema_version 99 is UNKNOWN-VERSION and leaves bytes untouched", () => {
@@ -110,8 +116,14 @@ describe("ce-user-test migrate-test-file.py", () => {
     expect(read(file)).toBe(before)
   })
 
-  test("already-current v11 file returns CURRENT without bytes or mtime churn", () => {
+  test("already-current v12 file returns CURRENT without bytes or mtime churn", () => {
     const file = tempFixture("current-v11.md")
+    writeFileSync(
+      file,
+      read(file)
+        .replace("schema_version: 11", "schema_version: 12")
+        .replace('cli_test_command: ""\n', 'cli_test_command: ""\nengine: ""\n'),
+    )
     const before = readFileSync(file)
     const beforeStat = statSync(file)
 
@@ -167,10 +179,11 @@ It must remain byte-for-byte within the migrated file body.`)
     const result = run("migrate", file)
 
     expect(result.code).toBe(0)
-    expect(result.stdout.trim()).toBe("MIGRATED 1 -> 11")
+    expect(result.stdout.trim()).toBe("MIGRATED 1 -> 12")
     const migrated = read(file)
-    expect(migrated).toContain("schema_version: 11")
+    expect(migrated).toContain("schema_version: 12")
     expect(migrated).toContain('cli_test_command: ""')
+    expect(migrated).toContain('engine: ""')
     expect(migrated).toContain("seams_read: false")
     expect(migrated).toContain("mcp_restart_threshold: 15")
     expect(migrated).toContain(
@@ -197,17 +210,39 @@ It must remain byte-for-byte within the migrated file body.`)
     expect(readFileSync(file)).toEqual(before)
   })
 
-  test("v9 fixture migrates to v11 without losing journey-era content", () => {
+  test("v9 fixture migrates to v12 without losing journey-era content", () => {
     const file = tempFixture("v9.md")
     const result = run("migrate", file)
 
     expect(result.code).toBe(0)
-    expect(result.stdout.trim()).toBe("MIGRATED 9 -> 11")
+    expect(result.stdout.trim()).toBe("MIGRATED 9 -> 12")
     const migrated = read(file)
-    expect(migrated).toContain("schema_version: 11")
+    expect(migrated).toContain("schema_version: 12")
     expect(migrated).toContain("## Journeys")
     expect(migrated).toContain('cli_test_command: ""')
+    expect(migrated).toContain('engine: ""')
     expect(migrated).toContain("avatar save works")
+  })
+
+  test("v11 migration fills default engine frontmatter and preserves chrome opt-in", () => {
+    const defaultFile = tempFixture("current-v11.md")
+    const defaultResult = run("migrate", defaultFile)
+
+    expect(defaultResult.code).toBe(0)
+    expect(defaultResult.stdout.trim()).toBe("MIGRATED 11 -> 12")
+    expect(read(defaultFile)).toContain('engine: ""')
+
+    const chromeFile = tempFixture("current-v11.md")
+    writeFileSync(
+      chromeFile,
+      read(chromeFile).replace(/cli_test_command: ""(\r?\n)/, 'cli_test_command: ""$1engine: "chrome"$1'),
+    )
+
+    const chromeResult = run("migrate", chromeFile)
+
+    expect(chromeResult.code).toBe(0)
+    expect(chromeResult.stdout.trim()).toBe("MIGRATED 11 -> 12")
+    expect(read(chromeFile)).toContain('engine: "chrome"')
   })
 
   test("migrate-run-json normalizes a v7-era last-run JSON", () => {
@@ -226,19 +261,23 @@ It must remain byte-for-byte within the migrated file body.`)
     expect(migrated.areas[0].adversarial_browser).toBe(false)
     expect(migrated.areas[0].adversarial_trigger).toBeNull()
     expect(migrated.areas[0].evidence).toEqual([])
+    expect(migrated.areas[0].engine).toBeNull()
+    expect(migrated.areas[0].engine_failure_attempts).toEqual([])
     expect(migrated.anomalies).toEqual([])
     expect(migrated.final_execution_index).toBeNull()
-    expect(migrated.schema_version).toBe(11)
+    expect(migrated.schema_version).toBe(12)
     expect(migrated.migration_defaults_applied).toEqual([
       "areas[].evidence",
       "anomalies[]",
       "final_execution_index",
+      "areas[].engine",
+      "areas[].engine_failure_attempts",
       "schema_version",
     ])
     expect("execution_index" in migrated.probes_run[0]).toBe(false)
   })
 
-  test("migrate-run-json does not stamp the marker on schema_version 11 input", () => {
+  test("migrate-run-json migrates v11 input to v12 engine defaults", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "ce-user-test-"))
     const file = path.join(dir, ".user-test-last-run.json")
     const before = {
@@ -266,6 +305,14 @@ It must remain byte-for-byte within the migrated file body.`)
           disposition: "explore-next-run",
         },
       ],
+      journeys_run: [
+        {
+          id: "J001",
+          name: "Primary user flow",
+          status: "interrupted",
+          checkpoints: [{ step: 1, area: "checkout/cart", passed: false }],
+        },
+      ],
     }
     writeFileSync(file, JSON.stringify(before, null, 2) + "\n")
 
@@ -274,11 +321,39 @@ It must remain byte-for-byte within the migrated file body.`)
     expect(result.code).toBe(0)
     expect(result.stdout.trim()).toBe("MIGRATED-RUN-JSON")
     const migrated = JSON.parse(read(file))
-    expect(migrated.migration_defaults_applied).toBeUndefined()
+    expect(migrated.migration_defaults_applied).toEqual([
+      "final_execution_index",
+      "areas[].engine",
+      "areas[].engine_failure_attempts",
+      "journeys_run[].engine_failure_attempts",
+      "schema_version",
+    ])
     expect(migrated.areas[0].evidence).toEqual(before.areas[0].evidence)
+    expect(migrated.areas[0].engine).toBeNull()
+    expect(migrated.areas[0].engine_failure_attempts).toEqual([])
     expect(migrated.anomalies).toEqual(before.anomalies)
+    expect(migrated.journeys_run[0].engine_failure_attempts).toEqual([])
     expect(migrated.final_execution_index).toBeNull()
-    expect(migrated.schema_version).toBe(11)
+    expect(migrated.schema_version).toBe(12)
+  })
+
+  test("migrate-run-json rejects future schema versions without rewriting", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "ce-user-test-"))
+    const file = path.join(dir, ".user-test-last-run.json")
+    const before = {
+      run_timestamp: "2026-06-20T12:00:00Z",
+      schema_version: 13,
+      completed: true,
+      scenario_slug: "checkout-quality",
+      areas: [{ slug: "checkout/cart" }],
+    }
+    writeFileSync(file, JSON.stringify(before, null, 2) + "\n")
+
+    const result = run("migrate-run-json", file)
+
+    expect(result.code).toBe(1)
+    expect(result.stdout.trim()).toBe("UNKNOWN-VERSION 13")
+    expect(JSON.parse(read(file))).toEqual(before)
   })
 
   test("migrate-run-json refuses unrecognized shape without guessing", () => {

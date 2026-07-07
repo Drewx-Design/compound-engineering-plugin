@@ -297,7 +297,7 @@ Before Run Results Persistence, read [anomaly-ledger.md](./references/anomaly-le
 
 ### Run Results Persistence
 
-After Phase 4 completes (all areas scored), write `tests/user-flows/.user-test-last-run.json`. See [last-run-schema.md](./references/last-run-schema.md) for full schema (v11), per-area fields, journey fields, execution index fields, and behavioral notes. File is overwritten each run except `novelty_fingerprints` which accumulates across runs (read-merge-write).
+After Phase 4 completes (all areas scored), write `tests/user-flows/.user-test-last-run.json`. See [last-run-schema.md](./references/last-run-schema.md) for full schema (v12), per-area fields, journey fields, execution index fields, and behavioral notes. File is overwritten each run except `novelty_fingerprints` which accumulates across runs (read-merge-write).
 
 ## Commit Mode
 

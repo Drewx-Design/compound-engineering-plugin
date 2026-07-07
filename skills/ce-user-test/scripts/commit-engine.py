@@ -59,7 +59,7 @@ JOURNAL_REL = "tests/user-flows/.user-test-commit-journal.json"
 LEDGER_REL = "tests/user-flows/.user-test-anomalies.jsonl"
 LAST_RUN_REL = "tests/user-flows/.user-test-last-run.json"
 SCORE_HISTORY_REL = "tests/user-flows/score-history.json"
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12
 EM_DASH = "—"
 
 
@@ -1482,6 +1482,12 @@ RUN_JSON_AREA_DEFAULTS = {
     "adversarial_browser": False,
     "adversarial_trigger": None,
     "evidence": [],
+    "engine": None,
+    "engine_failure_attempts": [],
+}
+
+RUN_JSON_JOURNEY_DEFAULTS = {
+    "engine_failure_attempts": [],
 }
 
 
@@ -1544,6 +1550,17 @@ def merge_last_run(payload: dict[str, Any]) -> str:
         doc[key] = deepcopy(payload.get(key, existing.get(key, [])))
         if not isinstance(doc[key], list):
             doc[key] = []
+    for journey in doc["journeys_run"]:
+        if not isinstance(journey, dict):
+            continue
+        for key, value in RUN_JSON_JOURNEY_DEFAULTS.items():
+            if key not in journey:
+                if isinstance(value, dict):
+                    journey[key] = dict(value)
+                elif isinstance(value, list):
+                    journey[key] = list(value)
+                else:
+                    journey[key] = value
     if "disconnects" not in doc or not isinstance(doc.get("disconnects"), dict):
         doc["disconnects"] = {"count": 0, "contexts": []}
     merged = deepcopy(existing.get("novelty_fingerprints", {})) if isinstance(existing, dict) else {}
@@ -1588,6 +1605,7 @@ def build_mutations(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], dict
 
 DISPOSITIONS = {"filed", "noted-in-area", "explore-next-run", "dismissed"}
 EVIDENCE_TYPES = {"action", "dom", "timing", "count"}
+ENGINE_VALUES = {"agent-browser", "chrome", "cli"}
 
 
 def is_int(value: Any) -> bool:
@@ -2281,6 +2299,9 @@ def validate_payload(payload: Any) -> tuple[list[dict[str, Any]], list[dict[str,
             errors.append({"code": "missing_area", "field": "areas[].slug"})
             continue
         area_by_slug[area["slug"]] = area
+        engine = area.get("engine")
+        if engine is not None and engine not in ENGINE_VALUES:
+            errors.append({"code": "engine_invalid", "area": area["slug"], "value": engine})
         if area.get("skip_reason"):
             continue
         ux = area.get("ux_score")
