@@ -6,14 +6,15 @@ Usage:
     python3 migrate-test-file.py migrate-run-json <last-run-json-file>
 
 `migrate <test-file>` prints exactly one of:
-    CURRENT                 schema_version is already 11; no bytes written
-    MIGRATED <from> -> 11   file was normalized and atomically rewritten
+    CURRENT                 schema_version is already 12; no bytes written
+    MIGRATED <from> -> 12   file was normalized and atomically rewritten
     UNKNOWN-VERSION <n>     schema_version is outside the accepted range
     CORRUPT <reason>        required structure is absent or unreadable
 
 `migrate-run-json <file>` prints:
     CURRENT                 JSON already has the current additive defaults
     MIGRATED-RUN-JSON       JSON was normalized and atomically rewritten
+    UNKNOWN-VERSION <n>     schema_version is outside the accepted range
     CORRUPT <reason>        required JSON shape is absent or unreadable
 
 Exit codes:
@@ -34,7 +35,7 @@ from typing import Any, Callable
 
 
 SCRIPT_NAME = "migrate-test-file"
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12
 EM_DASH = "—"
 
 
@@ -506,7 +507,16 @@ MIGRATION_TABLE = [
             "last-run schema_version + migration_defaults_applied marker",
         ],
     },
-    {"from_version": 11, "fills": []},
+    {
+        "from_version": 11,
+        "fills": [
+            "frontmatter.engine",
+            "last-run areas[].engine",
+            "last-run areas[].engine_failure_attempts",
+            "last-run journeys_run[].engine_failure_attempts",
+            "last-run schema_version + migration_defaults_applied marker",
+        ],
+    },
 ]
 
 
@@ -624,7 +634,8 @@ def apply_markdown_migration(lines: list[str], from_version: int, fm_end: int) -
     _ = MIGRATION_TABLE
 
     set_schema_version(lines, fm_end)
-    if from_version == 10:
+    fm_end = append_frontmatter_default(lines, fm_end, "engine", '""')
+    if from_version in (10, 11):
         return
     fm_end = append_frontmatter_default(lines, fm_end, "cli_test_command", '""')
     if from_version <= 5:
@@ -684,18 +695,37 @@ RUN_JSON_AREA_DEFAULTS = {
     "adversarial_browser": False,
     "adversarial_trigger": None,
     "evidence": [],
+    "engine": None,
+    "engine_failure_attempts": [],
+}
+
+RUN_JSON_JOURNEY_DEFAULTS = {
+    "engine_failure_attempts": [],
 }
 
 RUN_JSON_SCALAR_DEFAULTS = {
     "final_execution_index": None,
 }
 
-RUN_JSON_V11_DEFAULT_FIELDS = [
+RUN_JSON_MIGRATION_DEFAULT_FIELDS = [
     "areas[].evidence",
     "anomalies[]",
     "final_execution_index",
+    "areas[].engine",
+    "areas[].engine_failure_attempts",
+    "journeys_run[].engine_failure_attempts",
     "schema_version",
 ]
+
+RUN_JSON_AREA_DEFAULT_FIELD_NAMES = {
+    "evidence": "areas[].evidence",
+    "engine": "areas[].engine",
+    "engine_failure_attempts": "areas[].engine_failure_attempts",
+}
+
+RUN_JSON_JOURNEY_DEFAULT_FIELD_NAMES = {
+    "engine_failure_attempts": "journeys_run[].engine_failure_attempts",
+}
 
 
 def validate_last_run(doc: Any) -> dict[str, Any]:
@@ -710,6 +740,9 @@ def validate_last_run(doc: Any) -> dict[str, Any]:
     areas = doc.get("areas")
     if not isinstance(areas, list):
         raise ValidationFailure("CORRUPT", "areas is not an array")
+    version = doc.get("schema_version")
+    if type(version) is int and version > CURRENT_SCHEMA_VERSION:
+        raise ValidationFailure("UNKNOWN-VERSION", str(version))
     for area in areas:
         if not isinstance(area, dict) or not isinstance(area.get("slug"), str):
             raise ValidationFailure("CORRUPT", "area entry missing slug")
@@ -756,16 +789,41 @@ def normalize_last_run(doc: dict[str, Any]) -> bool:
                 else:
                     area[key] = value
                 changed = True
-                if stamp_migration_marker and key == "evidence":
-                    if "areas[].evidence" not in migration_default_fields:
-                        migration_default_fields.append("areas[].evidence")
+                field_name = RUN_JSON_AREA_DEFAULT_FIELD_NAMES.get(key)
+                if (
+                    stamp_migration_marker
+                    and field_name is not None
+                    and field_name not in migration_default_fields
+                ):
+                    migration_default_fields.append(field_name)
+    journeys = doc.get("journeys_run")
+    if isinstance(journeys, list):
+        for journey in journeys:
+            if not isinstance(journey, dict):
+                continue
+            for key, value in RUN_JSON_JOURNEY_DEFAULTS.items():
+                if key not in journey:
+                    if isinstance(value, dict):
+                        journey[key] = dict(value)
+                    elif isinstance(value, list):
+                        journey[key] = list(value)
+                    else:
+                        journey[key] = value
+                    changed = True
+                    field_name = RUN_JSON_JOURNEY_DEFAULT_FIELD_NAMES.get(key)
+                    if (
+                        stamp_migration_marker
+                        and field_name is not None
+                        and field_name not in migration_default_fields
+                    ):
+                        migration_default_fields.append(field_name)
     if stamp_migration_marker:
         if doc.get("schema_version") != CURRENT_SCHEMA_VERSION:
             doc["schema_version"] = CURRENT_SCHEMA_VERSION
             changed = True
         migration_default_fields = [
             field
-            for field in RUN_JSON_V11_DEFAULT_FIELDS
+            for field in RUN_JSON_MIGRATION_DEFAULT_FIELDS
             if field == "schema_version" or field in migration_default_fields
         ]
         if doc.get("migration_defaults_applied") != migration_default_fields:

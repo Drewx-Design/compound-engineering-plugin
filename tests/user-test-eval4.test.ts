@@ -43,7 +43,7 @@ function baseRun(overrides: Record<string, unknown> = {}): any {
   return {
     run_timestamp: "2026-07-01T12:00:00Z",
     scenario_slug: "checkout-quality",
-    schema_version: 11,
+    schema_version: 12,
     completed: true,
     final_execution_index: 2,
     disconnects: { count: 0, contexts: [] },

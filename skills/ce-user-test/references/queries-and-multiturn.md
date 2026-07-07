@@ -48,26 +48,26 @@ Multi-turn sequences contribute to the area's Quality score (scored against the 
 
 ### Proven Area Query Budget
 
-Active queries count against the tiered MCP budget for Proven areas (see [run-targeting.md](./run-targeting.md) for budget by consecutive pass count). `[stable]` queries run via CLI only and do not count. Only failing/untested probes bypass the cap (existing rule from [probes.md](./probes.md)).
+Active queries count against the tiered browser-call budget for Proven areas (see [run-targeting.md](./run-targeting.md) for budget by consecutive pass count). `[stable]` queries run via CLI only and do not count. Only failing/untested probes bypass the cap (existing rule from [probes.md](./probes.md)).
 
-**Worked example (3-call tier, consecutive passes 2-5):**
+**Worked example (3-browser-call tier, consecutive passes 2-5):**
 ```
-Proven area with 5 queries (2 active, 3 stable), 2 failing probes, 3-call budget:
+Proven area with 5 queries (2 active, 3 stable), 2 failing probes, 3-browser-call budget:
 → 2 failing probes run (uncapped): 2 browser calls
 → 3 stable queries run via CLI (uncapped): 0 browser calls
 → 1 remaining browser call → spot-check 1 active query
 → 1 active query skipped this run
 
-At 2-call tier (6-9 consecutive passes), same area:
+At 2-browser-call tier (6-9 consecutive passes), same area:
 → 2 failing probes run (uncapped, outside budget): 2 browser calls
 → 3 stable queries run via CLI (uncapped): 0 browser calls
-→ 2 budget calls → spot-check 2 active queries
+→ 2 budgeted browser calls → spot-check 2 active queries
 → 0 active queries skipped
 
-At 1-call tier (10+ consecutive passes), same area:
+At 1-browser-call tier (10+ consecutive passes), same area:
 → 2 failing probes run (uncapped, outside budget): 2 browser calls
 → 3 stable queries run via CLI (uncapped): 0 browser calls
-→ 1 budget call available, but area already exercised by probes
+→ 1 budgeted browser call available, but area already exercised by probes
 → 2 active queries skipped this run
 ```
 
@@ -134,7 +134,7 @@ Transition rules (applied per-query, commit mode only):
 - `[stable]` → active: Scores Q4 twice consecutively (soft regression — note "previously stable query softened") OR scores Q≤3 once (immediate — generate probe per step 8)
 - `[retired]` → active: CLI spot-check scores ≤ 4 (generate probe)
 
-**CLI gate:** Queries without `cli_test_command` in the test file max out at `[stable]`. They receive browser spot-checks via the Proven area MCP budget.
+**CLI gate:** Queries without `cli_test_command` in the test file max out at `[stable]`. They receive browser spot-checks via the Proven area browser-call budget.
 
 **Execution by status:**
 
@@ -162,24 +162,24 @@ Any interaction where the core action (query text, filter applied, button sequen
 
 **Run 1 state boundary:** Novelty is measured against the test file state at run start. On run 1 of a new file, all Queries defined during Phase 1 area creation are "documented" even though they were just written. The novelty budget requires interactions beyond those Queries.
 
-### MCP Budget by Area Type
+### Browser-Call Budget by Area Type
 
 ```
 Proven area (tiered cap, see run-targeting.md):
-  → novelty = 1 MCP call after probes and active queries (at 3-call tier)
-  → at 1-call tier: single call used for probe spot-check OR novelty (agent discretion)
+  → novelty = 1 browser call after probes and active queries (at 3-browser-call tier)
+  → at 1-browser-call tier: single browser call used for probe spot-check OR novelty (agent discretion)
 
 Uncharted/FULL area (no hard cap):
-  → novelty = 30% of calls used on probes + queries, minimum 2 calls
-  → Example: 10 calls on probes/queries → 3 novelty calls
-  → Example: 4 calls on probes/queries → still minimum 2 novelty calls
+  → novelty = 30% of browser calls used on probes + queries, minimum 2 browser calls
+  → Example: 10 browser calls on probes/queries → 3 novelty browser calls
+  → Example: 4 browser calls on probes/queries → still minimum 2 novelty browser calls
 ```
 
-**Proven area budget exhaustion:** When the tiered budget cap is fully consumed by failing/untested probes and active queries, the novelty budget is 0 for that area. Probes and queries take priority — novelty defers, not the other way around. Passing-probe spot-checks also defer when novelty would compete for the last call.
+**Proven area budget exhaustion:** When the tiered budget cap is fully consumed by failing/untested probes and active queries, the novelty budget is 0 for that area. Probes and queries take priority — novelty defers, not the other way around. Passing-probe spot-checks also defer when novelty would compete for the last browser call.
 
 ### Mandatory Probe Rule
 
-At least 1 novel interaction per `scored_output` area MUST generate a probe each run (waived at 1-call tier -- see [run-targeting.md](./run-targeting.md)), even if the interaction appeared clean. The probe verify clause can be "confirm this path remains clean after code changes." This prevents the agent from classifying everything as uninteresting.
+At least 1 novel interaction per `scored_output` area MUST generate a probe each run (waived at 1-browser-call tier -- see [run-targeting.md](./run-targeting.md)), even if the interaction appeared clean. The probe verify clause can be "confirm this path remains clean after code changes." This prevents the agent from classifying everything as uninteresting.
 
 ### Progressive Narrowing Interaction
 
@@ -262,7 +262,7 @@ Adversarial mode (CLI score 3 trigger) overrides fingerprint skipping for its sp
 
 ### Proven Area Budget Interaction
 
-Proven areas keep their tiered MCP budget (see [run-targeting.md](./run-targeting.md)). Fingerprint filtering does NOT increase the budget -- it changes WHAT those calls test. If fingerprints exclude obvious interactions, the budgeted calls target genuinely novel territory.
+Proven areas keep their tiered browser-call budget (see [run-targeting.md](./run-targeting.md)). Fingerprint filtering does NOT increase the budget -- it changes WHAT those browser calls test. If fingerprints exclude obvious interactions, the budgeted browser calls target genuinely novel territory.
 
 ### Matching Semantics
 
@@ -308,8 +308,8 @@ When triggered, the area's Phase 3 execution changes in five ways:
    - Priority: P1 (CLI already revealed the weakness)
 
 4. **Increased novelty budget.**
-   - Proven areas: all budgeted MCP calls must be adversarial, not happy-path spot-checks
-   - Uncharted areas: novelty budget increases to 40% of calls (from 30%), minimum 3 (from 2)
+   - Proven areas: all budgeted browser calls must be adversarial, not happy-path spot-checks
+   - Uncharted areas: novelty budget increases to 40% of browser calls (from 30%), minimum 3 browser calls (from 2)
 
 5. **Report flag** in DETAILS:
    ```

@@ -14,7 +14,7 @@ Written to `tests/user-flows/.user-test-last-run.json` after Phase 4 completes.
 ```json
 {
   "run_timestamp": "2026-02-28T14:30:00Z",
-  "schema_version": 11,
+  "schema_version": 12,
   "completed": true,
   "scenario_slug": "checkout",
   "git_sha": "abc1234",
@@ -37,6 +37,8 @@ Written to `tests/user-flows/.user-test-last-run.json` after Phase 4 completes.
       "adversarial_browser": false,
       "adversarial_trigger": null,
       "broad_exploration_start_index": 3,
+      "engine": "agent-browser",
+      "engine_failure_attempts": [],
       "evidence": [
         { "type": "action", "ref": 1, "note": "cart quantity update supported the UX score" }
       ]
@@ -104,6 +106,7 @@ Written to `tests/user-flows/.user-test-last-run.json` after Phase 4 completes.
         { "step": 5, "area": "<area-slug-1>", "passed": false,
           "detail": "stale state from step 2 still active" }
       ],
+      "engine_failure_attempts": [],
       "time_seconds": 45
     }
   ],
@@ -130,6 +133,25 @@ Written to `tests/user-flows/.user-test-last-run.json` after Phase 4 completes.
 }
 ```
 
+## Engine Attribution Fields (v12 additions)
+
+| Field | Type | Default | Written by |
+|-------|------|---------|-----------|
+| `schema_version` | integer | 12 | Phase 4 writes `12`; `migrate-run-json` writes `12` after defaulting a pre-v12 run |
+| `areas[].engine` | string or null | null | Phase 4 scoring; one of `agent-browser`, `chrome`, or `cli` for newly scored areas. `null` means the area was scored before engine attribution existed |
+| `areas[].engine_failure_attempts` | array of engine-failure entries | [] | Phase 4 failover handling; `migrate-run-json` for pre-v12 defaults |
+| `areas[].engine_failure_attempts[].engine` | string | required when entry exists | Phase 4 failover handling; one of `agent-browser`, `chrome`, or `cli` |
+| `areas[].engine_failure_attempts[].area` | string | required when entry exists | Phase 4 failover handling; area/checkpoint context for the failed attempt |
+| `areas[].engine_failure_attempts[].why` | string | required when entry exists | Phase 4 failover handling; why the engine attempt failed |
+| `journeys_run[].engine_failure_attempts` | array of engine-failure entries | [] | Journey execution; interrupted attempts stay in `journeys_run` alongside re-runs |
+| `journeys_run[].engine_failure_attempts[].engine` | string | required when entry exists | Journey execution; one of `agent-browser`, `chrome`, or `cli` |
+| `journeys_run[].engine_failure_attempts[].checkpoint` | integer or string | required when entry exists | Journey execution; failed checkpoint or checkpoint label |
+| `journeys_run[].engine_failure_attempts[].why` | string | required when entry exists | Journey execution; why the engine attempt failed |
+| `areas[].skip_reason` | string or null | null | Phase 4 scoring; v12 adds `engine-failure` for areas never re-run after both engines failed and `auth-blocked` for auth-gated areas in headless/pipeline contexts |
+| `migration_defaults_applied` | array of field-name strings | absent | `migrate-run-json` only, when incoming `schema_version` is absent or below 12 |
+
+`skip_reason: engine-failure` is reserved for areas never re-run. If an engine failure is followed by a fresh score, record the failure in `engine_failure_attempts` and keep `skip_reason: null`.
+
 ## Evidence and Ledger Fields (v11 additions)
 
 | Field | Type | Default | Written by |
@@ -143,8 +165,8 @@ Written to `tests/user-flows/.user-test-last-run.json` after Phase 4 completes.
 | `anomalies[].issue_ref` | string | absent | Phase 4 may set it for pre-existing issues; `confirm-issues` backfills filed issue numbers for newly confirmed candidates |
 | `anomalies[].reason` | string | required for `dismissed` | Phase 4 reconciliation; non-empty dismissal reason |
 | `final_execution_index` | integer or null | null | Phase 4 reconciliation; must equal the run's last consumed execution index |
-| `schema_version` | integer | absent before v11 | Phase 4 writes `11`; `migrate-run-json` writes `11` after defaulting a pre-v11 run |
-| `migration_defaults_applied` | array of field-name strings | absent | `migrate-run-json` only, when incoming `schema_version` is absent or below 11 |
+| `schema_version` | integer | absent before v11 | Introduced at v11; current Phase 4 writes the latest schema version |
+| `migration_defaults_applied` | array of field-name strings | absent | `migrate-run-json` only, when incoming `schema_version` is absent or below the current version |
 | `anomaly_ledger_digest` | object | absent | Phase 4 reconciliation |
 | `anomaly_ledger_digest.lines` | integer | absent | Phase 4 reconciliation; number of ledger lines digested |
 | `anomaly_ledger_digest.sha256` | string | absent | Phase 4 reconciliation; SHA-256 digest of the ledger contents |

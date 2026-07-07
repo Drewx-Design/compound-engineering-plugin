@@ -250,6 +250,27 @@ function schemaNameSets(source: string): {
   }
 }
 
+function schemaV12NameSets(source: string): {
+  engineValues: Set<string>
+  skipReasons: Set<string>
+} {
+  const v12Section = markdownSection(source, "## Engine Attribution Fields (v12 additions)")
+  const engineRow = tableRow(v12Section, "`areas[].engine`")
+  const skipReasonRow = tableRow(v12Section, "`areas[].skip_reason`")
+  return {
+    engineValues: new Set(
+      [...engineRow.matchAll(/`([^`]+)`/g)]
+        .map((match) => match[1])
+        .filter((value) => value !== "areas[].engine" && value !== "null"),
+    ),
+    skipReasons: new Set(
+      [...skipReasonRow.matchAll(/`([^`]+)`/g)]
+        .map((match) => match[1])
+        .filter((value) => value !== "areas[].skip_reason"),
+    ),
+  }
+}
+
 function assertNameSetsEqual(
   label: string,
   sources: NameSource[],
@@ -279,7 +300,7 @@ function assertNameSetsEqual(
   }
 }
 
-describe("ce-user-test v11 protocol name anti-drift", () => {
+describe("ce-user-test protocol name anti-drift", () => {
   const commitEngine = readRel("skills/ce-user-test/scripts/commit-engine.py")
   const migrateTestFile = readRel("skills/ce-user-test/scripts/migrate-test-file.py")
   const eval4 = readRel("skills/ce-user-test-eval/scripts/eval4-ledger-coverage.py")
@@ -287,6 +308,9 @@ describe("ce-user-test v11 protocol name anti-drift", () => {
     readRel("skills/ce-user-test/references/anomaly-ledger.md"),
   )
   const lastRunSchema = schemaNameSets(
+    readRel("skills/ce-user-test/references/last-run-schema.md"),
+  )
+  const lastRunSchemaV12 = schemaV12NameSets(
     readRel("skills/ce-user-test/references/last-run-schema.md"),
   )
 
@@ -378,9 +402,35 @@ describe("ce-user-test v11 protocol name anti-drift", () => {
     expect(engineAreaDefaults).not.toBeNull()
     expect(engineAreaDefaults).toBe(migrateAreaDefaults)
 
+    const engineJourneyDefaults = extractPythonDictLiteralBody(commitEngine, "RUN_JSON_JOURNEY_DEFAULTS")
+    const migrateJourneyDefaults = extractPythonDictLiteralBody(migrateTestFile, "RUN_JSON_JOURNEY_DEFAULTS")
+    expect(engineJourneyDefaults).not.toBeNull()
+    expect(engineJourneyDefaults).toBe(migrateJourneyDefaults)
+
     const engineArrayKeys = extractPythonListStringItems(commitEngine, "RUN_JSON_ARRAY_KEYS")
     const migrateArrayDefaults = extractPythonDictKeys(migrateTestFile, "RUN_JSON_ARRAY_DEFAULTS")
     expect(sorted(engineArrayKeys)).toEqual(sorted(migrateArrayDefaults))
+  })
+
+  test("v12 engine and skip reason protocol names stay pinned", () => {
+    assertNameSetsEqual(
+      "engine values",
+      [
+        {
+          source: "commit-engine.py ENGINE_VALUES",
+          values: extractPythonSetConstant(commitEngine, "ENGINE_VALUES"),
+        },
+        {
+          source: "last-run-schema.md v12 engine row",
+          values: lastRunSchemaV12.engineValues,
+        },
+      ],
+      3,
+    )
+    expect(sorted(lastRunSchemaV12.skipReasons)).toEqual([
+      "auth-blocked",
+      "engine-failure",
+    ])
   })
 
   test("commit payload prose names engine-owned maturity fields", () => {

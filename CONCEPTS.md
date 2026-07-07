@@ -80,6 +80,12 @@ A mandatory per-run side-channel (`.user-test-anomalies.jsonl`) the exploring ag
 ### Evidence array
 The per-scored-area list in the run JSON that grounds a score in observations: typed entries (action, dom, timing, count) each carrying a ref and a note. Distinct from an Evidence dossier — the array grounds one score inside a run artifact; a dossier is a bulk scratch-storage artifact gathered by a scout agent.
 
+### Browser engine
+The substrate a browser-testing skill drives through a tool-neutral action contract (navigate, read-page, evaluate, screenshot, click, fill): agent-browser CLI (the default) or the claude-in-chrome MCP (opt-in for watching a run in the user's real logged-in session). Each scored area and journey records which engine scored it (engine attribution), and a swap between engines happens only at area boundaries so no area's evidence mixes engines.
+
+### Replay-before-blame
+The failure-attribution step that runs before any retry of a failed browser tool call: execute a known-good minimal action (default: navigate to the app URL). If it succeeds, the original failure was the app — score it and probe it; if it fails, the failure was the connection — enter recovery. Replaces blind retry-once, which absorbed real app defects into the disconnect counter.
+
 ## Review and workflow vocabulary
 
 ### Reviewer persona

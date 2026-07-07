@@ -151,7 +151,7 @@ function defaultEvidence(finalIndex: number): any[] {
 }
 
 function prepareV11Payload(project: Project, payload: any): void {
-  payload.schema_version = 11
+  payload.schema_version = 12
   payload.final_execution_index ??= 1
   payload.disconnects ??= { count: 0, contexts: [] }
   payload.anomalies ??= []
@@ -529,7 +529,7 @@ describe("ce-user-test commit-engine aging harness", () => {
     const project = makeProject("unknown-content.md", "custom-content.md", "custom-content")
     const firstMigrate = runMigrate(project.testFile)
     expect(firstMigrate.code).toBe(0)
-    expect(firstMigrate.stdout.trim()).toBe("MIGRATED 5 -> 11")
+    expect(firstMigrate.stdout.trim()).toBe("MIGRATED 5 -> 12")
 
     const payload = cyclePayload(project, 0, {
       areas: [

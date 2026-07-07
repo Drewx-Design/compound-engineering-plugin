@@ -199,7 +199,7 @@ function defaultEvidence(payload: any): any[] {
 function prepareV11Payload(project: { flows: string }, payload: any): void {
   const ledgerSpec = payload.__ledger
   delete payload.__ledger
-  payload.schema_version = 11
+  payload.schema_version = 12
   payload.final_execution_index ??= 1
   payload.disconnects ??= { count: 0, contexts: [] }
   payload.anomalies ??= []
@@ -370,11 +370,13 @@ function writeMarkerLastRun(
     run_timestamp: "2026-06-30T12:00:00Z",
     completed: true,
     scenario_slug: "checkout-quality",
-    schema_version: 11,
+    schema_version: 12,
     migration_defaults_applied: [
       "areas[].evidence",
       "anomalies[]",
       "final_execution_index",
+      "areas[].engine",
+      "areas[].engine_failure_attempts",
       "schema_version",
     ],
     areas: [],
@@ -522,6 +524,12 @@ describe("ce-user-test commit-engine.py validation", () => {
         }),
         code: "promotion_contradicts_evidence",
       },
+      {
+        payload: basePayload({
+          areas: [{ ...basePayload().areas[0], engine: "firefox" }],
+        }),
+        code: "engine_invalid",
+      },
     ]
 
     for (const item of cases) {
@@ -563,6 +571,111 @@ describe("ce-user-test commit-engine.py validation", () => {
 
     expect(result.code).toBe(0)
     expect(result.stdout.trim()).toBe("PLANNED")
+  })
+
+  test("engine failure record and re-run score validate and persist", () => {
+    const project = makeProject()
+    const failureAttempt = {
+      engine: "chrome",
+      area: "checkout/cart",
+      why: "chrome disconnected after submit",
+    }
+    const journeyFailure = {
+      engine: "chrome",
+      checkpoint: 3,
+      why: "chrome disconnected during payment checkpoint",
+    }
+    const payload = basePayload({
+      final_execution_index: 5,
+      areas: [
+        {
+          ...basePayload().areas[0],
+          engine: "agent-browser",
+          engine_failure_attempts: [failureAttempt],
+          ux_score: 4,
+          quality_score: null,
+          skip_reason: null,
+        },
+      ],
+      journeys_run: [
+        {
+          id: "J001",
+          name: "Primary user flow",
+          status: "interrupted",
+          checkpoints: [
+            { step: 1, area: "checkout/cart", passed: true },
+            { step: 3, area: "checkout/cart", passed: false },
+          ],
+          engine_failure_attempts: [journeyFailure],
+          time_seconds: 18,
+        },
+        {
+          id: "J001",
+          name: "Primary user flow",
+          status: "passing",
+          checkpoints: [{ step: 1, area: "checkout/cart", passed: true }],
+          time_seconds: 24,
+        },
+      ],
+      issue_candidates: [],
+    })
+
+    fullApply(project, payload)
+
+    const lastRun = readJson(lastRunPath(project))
+    expect(lastRun.areas[0].engine).toBe("agent-browser")
+    expect(lastRun.areas[0].engine_failure_attempts).toEqual([failureAttempt])
+    expect(lastRun.areas[0].skip_reason).toBeNull()
+    expect(lastRun.areas[0].ux_score).toBe(4)
+    expect(lastRun.journeys_run).toHaveLength(2)
+    expect(lastRun.journeys_run[0].engine_failure_attempts).toEqual([journeyFailure])
+    expect(lastRun.journeys_run[1].engine_failure_attempts).toEqual([])
+  })
+
+  test("last-run merge preserves and replaces per-area engine attribution", () => {
+    const preserved = makeProject()
+    writeJson(lastRunPath(preserved), {
+      run_timestamp: "2026-06-30T12:00:00Z",
+      completed: true,
+      scenario_slug: "checkout-quality",
+      schema_version: 12,
+      areas: [
+        {
+          slug: "checkout/cart",
+          engine: "chrome",
+          engine_failure_attempts: [],
+        },
+      ],
+    })
+
+    fullApply(preserved, basePayload({ issue_candidates: [] }))
+
+    expect(readJson(lastRunPath(preserved)).areas[0].engine).toBe("chrome")
+
+    const replaced = makeProject()
+    writeJson(lastRunPath(replaced), {
+      run_timestamp: "2026-06-30T12:00:00Z",
+      completed: true,
+      scenario_slug: "checkout-quality",
+      schema_version: 12,
+      areas: [
+        {
+          slug: "checkout/cart",
+          engine: "chrome",
+          engine_failure_attempts: [],
+        },
+      ],
+    })
+
+    fullApply(
+      replaced,
+      basePayload({
+        areas: [{ ...basePayload().areas[0], engine: "agent-browser" }],
+        issue_candidates: [],
+      }),
+    )
+
+    expect(readJson(lastRunPath(replaced)).areas[0].engine).toBe("agent-browser")
   })
 
   test("ledger anomaly without a disposition is rejected before journaling", () => {
@@ -906,7 +1019,7 @@ describe("ce-user-test commit-engine.py validation", () => {
       run_timestamp: "2026-06-30T12:00:00Z",
       completed: true,
       scenario_slug: "checkout-quality",
-      schema_version: 11,
+      schema_version: 12,
       areas: [],
       anomalies: [
         {
@@ -1311,8 +1424,11 @@ describe("ce-user-test commit-engine.py journaled apply", () => {
     expect(migrated.code).toBe(0)
     expect(migrated.stdout.trim()).toBe("CURRENT")
     const lastRun = readJson(path.join(project.flows, ".user-test-last-run.json"))
+    expect(lastRun.schema_version).toBe(12)
     expect(lastRun.completed).toBe(true)
     expect(lastRun.custom_preserved).toBe("keep")
+    expect(lastRun.areas[0].engine).toBeNull()
+    expect(lastRun.areas[0].engine_failure_attempts).toEqual([])
     expect(lastRun.novelty_fingerprints["checkout/cart"]).toContain(
       "checkout/cart:edge-query:old",
     )

@@ -19,9 +19,9 @@ At the start of Phase 3, before broad exploration:
    5. `passing` spot-checks
 5. For each probe: navigate to the area, execute the query, run the verify check, record pass/fail
 
-### Proven Area MCP Budget
+### Proven Area Browser-Call Budget
 
-Failing and untested probes **always run regardless of budget cap**. The tiered MCP budget for Proven areas (see [run-targeting.md](./run-targeting.md) for budget by consecutive pass count) only constrains passing-probe spot-checks. If a Proven area has 4 failing probes, all 4 run (no spot-check). The budget prevents stable areas from consuming exploration time — it does not suppress known-failing assertions. See [run-targeting.md](./run-targeting.md) for override priority.
+Failing and untested probes **always run regardless of budget cap**. The tiered browser-call budget for Proven areas (see [run-targeting.md](./run-targeting.md) for budget by consecutive pass count) only constrains passing-probe spot-checks. If a Proven area has 4 failing probes, all 4 run (no spot-check). The budget prevents stable areas from consuming exploration time — it does not suppress known-failing assertions. See [run-targeting.md](./run-targeting.md) for override priority.
 
 ## Probe Generation
 
@@ -384,9 +384,9 @@ Progressive narrowing classifications (SKIP/PROBES-ONLY/FULL) apply to per-area 
 
 The active cross-area probe cap is governed by `cross_area_probe_run_history_cap` in `../scripts/caps-registry.json`. Cross-area probes are more expensive than per-area (two navigation steps, no reset). If the table exceeds the cap, the oldest passing probes rotate out first (same as per-area rotation).
 
-### Proactive Restart Interaction
+### Proactive Restart and Failover Interaction
 
-Cross-area probes must NOT be interrupted by a proactive restart — they depend on state carry-over between trigger and observation areas. The restart check is skipped during cross-area probe execution. The MCP call counter still increments; the restart happens after the cross-area probe sequence completes.
+Cross-area probe sequences must NOT be interrupted by a proactive restart or deferred failover — they depend on state carry-over between trigger and observation areas. The restart/failover check is skipped during sequence execution; if the active engine fails before the sequence can complete, record the interrupted attempt and re-run the whole sequence on the new engine. For Chrome, the proactive-restart browser-call counter still increments. The restart or failover boundary happens after the cross-area probe sequence completes when the engine is still usable. See [browser-engines.md](./browser-engines.md) for the canonical recovery and failover rules.
 
 ### .user-test-last-run.json Schema
 

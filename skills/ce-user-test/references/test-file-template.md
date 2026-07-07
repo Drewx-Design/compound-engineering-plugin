@@ -6,13 +6,15 @@ Test files live in `tests/user-flows/<scenario-slug>.md` in the target project. 
 
 ```markdown
 ---
-schema_version: 10
+schema_version: 12
 scenario: "<scenario-name>"
 app_url: "http://localhost:3000"
 created: "<YYYY-MM-DD>"
 last_run: "<YYYY-MM-DD>"
 seams_read: false  # set to true after first code-reading pass (see orientation.md)
 cli_test_command: ""  # optional, e.g. "node test-cli.js --query '{query}'"
+engine: ""  # optional; empty uses the default engine, or set "chrome" for visible Chrome
+known_good_action: ""  # optional replay-before-blame override; empty uses app_url navigation
 cli_queries:  # optional
   # - query: "example query"
   #   expected: "description of correct response (agent evaluates semantically)"
@@ -23,7 +25,7 @@ performance_thresholds:  # optional, seconds
   # acceptable: 8
   # slow: 20
   # broken: 60
-mcp_restart_threshold: <mcp_restart_threshold from ../scripts/caps-registry.json>  # optional, proactive page reload after N MCP calls
+mcp_restart_threshold: <mcp_restart_threshold from ../scripts/caps-registry.json>  # optional, proactive chrome-engine page reload after N MCP calls
 ---
 
 # <Scenario Name>
@@ -122,7 +124,11 @@ Run History format: comma-separated P/F entries, most recent first. Example: `P,
 
 ## Schema Migration
 
-Current test files use schema v10. Migration from older files and `.user-test-last-run.json` normalization are owned by `../scripts/migrate-test-file.py`; the per-version fills live in that script's data table and tests. Update the script and tests when schema behavior changes.
+Current test files use schema v12. Migration from older files and `.user-test-last-run.json` normalization are owned by `../scripts/migrate-test-file.py`; the per-version fills live in that script's data table and tests. Update the script and tests when schema behavior changes.
+
+**Engine frontmatter:** `engine: ""` selects the default engine. Set `engine: "chrome"` only when the scenario intentionally opts into visible Chrome. Migration appends `engine: ""` to older files that lack the key.
+
+**Known-good action:** `known_good_action: ""` uses `app_url` navigation for replay-before-blame. Set a non-empty value only when the test file needs a scenario-specific known-good action.
 
 **CLI gate for query retirement:** Only queries in test files with `cli_test_command` set can reach `[retired]` status. Queries without CLI backstop max out at `[stable]` and continue receiving browser spot-checks via the Proven area MCP budget. If `cli_test_command` is removed from a file with `[retired]` queries, those queries demote to `[stable]` on next commit.
 

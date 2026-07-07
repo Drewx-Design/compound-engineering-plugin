@@ -70,8 +70,13 @@
     },
     "mcp_restart_threshold": {
       "value": 15,
-      "unit": "MCP calls",
-      "meaning": "Default proactive browser page-reload threshold."
+      "unit": "chrome MCP calls",
+      "meaning": "Default proactive page-reload threshold for the chrome engine."
+    },
+    "failover_disconnect_threshold": {
+      "value": 3,
+      "unit": "consecutive chrome disconnects",
+      "meaning": "Failover trigger and run-end SIGNALS disconnect-analysis threshold read this key."
     },
     "delta_warning_threshold": {
       "value": -0.5,
