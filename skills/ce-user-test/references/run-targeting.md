@@ -8,7 +8,7 @@ narrowing — work together to focus testing time where it has the most impact.
 
 0. **Code-affected areas (if git diff available):** Full exploration regardless of maturity status — even Proven areas get the full checklist. See Git-Aware Targeting below.
 1. **Pick highest-priority Explore Next Run items first** (P1 > P2 > P3), not FIFO
-2. **Uncharted areas:** Full investigation with batched `javascript_tool` calls. See [browser-input-patterns.md](./browser-input-patterns.md) for input patterns and batching tips.
+2. **Uncharted areas:** Full investigation with batched `evaluate` calls. See [browser-engines.md](./browser-engines.md) for input patterns and batching tips.
 3. **Proven areas:** Spot-check scaled by stability (see tiered budget below), plus any failing/untested probes. Verify the happy path still works.
 
 ### Proven Area Budget by Stability

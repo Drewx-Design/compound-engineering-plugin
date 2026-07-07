@@ -152,7 +152,7 @@ Quick reference: (0) Code-affected → full. (1) P1 Explore Next Run → full. (
 
 ### Connection Resilience
 
-See [connection-resilience.md](./references/connection-resilience.md) for reactive recovery, proactive restart at configurable MCP call threshold, and disconnect tracking rules.
+Read [browser-engines.md](./references/browser-engines.md) for engine selection, verb budgets, resilience, failover, and replay-before-blame rules.
 
 ### Modal Dialog Handling
 
@@ -458,5 +458,5 @@ After final run, auto-commit (same as normal `/ce-user-test`). Pass `--no-commit
 - [run-targeting.md](./references/run-targeting.md) — area selection, git-aware targeting, progressive narrowing
 - [bugs-registry.md](./references/bugs-registry.md) — bug lifecycle, commit mode update rules
 - [graduation.md](./references/graduation.md) — browser discoveries → CLI regression checks
-- [browser-input-patterns.md](./references/browser-input-patterns.md) / [connection-resilience.md](./references/connection-resilience.md) — browser patterns, connection resilience
+- [browser-engines.md](./references/browser-engines.md) — engine verb map, selection, resilience, failover, and evaluate payloads
 - [iterate-mode.md](./references/iterate-mode.md) / [orientation.md](./references/orientation.md) — multi-run orchestration, first-run code reading
