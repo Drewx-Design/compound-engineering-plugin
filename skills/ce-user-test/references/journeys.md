@@ -55,7 +55,7 @@ Checkpoints are 1 browser call each (batched `evaluate`). For "Count change" che
 
 **Inter-journey reset:** Navigate to the app's entry URL between journeys. Each journey starts from clean navigation state. Within a journey, no resets between steps.
 
-**Engine atomicity:** Run a journey on one browser engine from step 1 through completion. If an engine failure interrupts the journey at any checkpoint, record that attempt as interrupted, fail over per [browser-engines.md](./browser-engines.md), then re-run the whole journey from checkpoint 1 on the new engine. Keep the interrupted attempt in `journeys_run` alongside the re-run; it is calibration-relevant and feeds `engine_failure_attempts`.
+**Engine atomicity:** Run a journey on one browser engine from step 1 through completion. If an engine failure interrupts the journey at any checkpoint, record that attempt as interrupted (set its `journeys_run` status to `interrupted`), fail over per [browser-engines.md](./browser-engines.md), then re-run the whole journey from checkpoint 1 on the new engine. Keep the interrupted attempt in `journeys_run` alongside the re-run; it is calibration-relevant and feeds `engine_failure_attempts`. Commit writes status and Run History only for the completed re-run, never for the `interrupted` attempt.
 
 **Execution order when multiple journeys exist:**
 1. `failing-at-N` (highest signal) — always run

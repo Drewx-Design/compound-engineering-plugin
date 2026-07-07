@@ -1893,6 +1893,101 @@ describe("ce-user-test commit-engine.py journaled apply", () => {
     )
   })
 
+  test("interrupted journey attempt is skipped; only the completed re-run writes status and history", () => {
+    const project = makeProject()
+    writeFileSync(
+      project.testFile,
+      readFileSync(project.testFile, "utf8").replace(
+        "## Area Trends",
+        `### J001: Checkout to profile
+
+**Steps:**
+
+| Step | Area | Action | Checkpoint |
+|------|------|--------|------------|
+| 1 | checkout/cart | Add item | Badge increments |
+| 2 | checkout/profile | Open profile | Cart badge remains visible |
+
+**Status:** passing
+**Last Run:** 2026-06-30
+**Run History:** P P P P
+**Generated From:** manual
+
+## Area Trends`,
+      ),
+    )
+
+    fullApply(
+      project,
+      basePayload({
+        journeys_run: [
+          {
+            id: "J001",
+            status: "interrupted",
+            checkpoints: [
+              { step: 1, area: "checkout/cart", passed: true, detail: "ok" },
+            ],
+            engine_failure_attempts: [
+              { engine: "chrome", checkpoint: 2, why: "MCP disconnected mid-journey" },
+            ],
+          },
+          {
+            id: "J001",
+            status: "passing",
+            checkpoints: [
+              { step: 1, area: "checkout/cart", passed: true, detail: "ok" },
+              { step: 2, area: "checkout/profile", passed: true, detail: "ok" },
+            ],
+          },
+        ],
+        issue_candidates: [],
+      }),
+    )
+    confirmAll(project, [])
+
+    // The interrupted engine-failure attempt must not append an F token; only
+    // the completed re-run's P lands, taking the journey to stable.
+    const journey = section(
+      readFileSync(project.testFile, "utf8"),
+      "### J001: Checkout to profile",
+    )
+    expect(journey).toContain("**Run History:** P P P P P")
+    expect(journey).toContain("**Status:** stable")
+    expect(journey).not.toContain("F:2")
+  })
+
+  test("malformed engine_failure_attempts entries are rejected", () => {
+    const project = makeProject()
+    // Area scope: unknown engine, empty why, and missing area context.
+    const areaErrors = validationErrors(
+      project,
+      basePayload({
+        areas: [
+          {
+            ...basePayload().areas[0],
+            engine_failure_attempts: [{ engine: "firefox", why: "" }],
+          },
+        ],
+      }),
+    )
+    expectValidationCode(areaErrors, "engine_failover_invalid")
+
+    // Journey scope: valid engine and reason but missing checkpoint context.
+    const journeyErrors = validationErrors(
+      project,
+      basePayload({
+        journeys_run: [
+          {
+            id: "J001",
+            status: "interrupted",
+            engine_failure_attempts: [{ engine: "chrome", why: "disconnect" }],
+          },
+        ],
+      }),
+    )
+    expectValidationCode(journeyErrors, "engine_failover_invalid")
+  })
+
   test("journey escalation writes escalated_to and does not duplicate on fourth same-step failure", () => {
     const project = makeProject()
     writeFileSync(

@@ -951,6 +951,12 @@ def update_journeys(
         journey_id = result.get("id")
         if not isinstance(journey_id, str):
             continue
+        # Interrupted engine-failure attempts are kept in journeys_run for
+        # calibration (see journeys.md), but only fully-completed journeys have
+        # status/history written during commit. Skipping them keeps an engine
+        # disconnect from being recorded as an app-side journey failure.
+        if result.get("status") == "interrupted":
+            continue
         heading = None
         for index, line in enumerate(lines):
             if line.startswith(f"### {journey_id}:"):
@@ -2282,6 +2288,45 @@ def expected_maturity_absence_warnings(payload: dict[str, Any]) -> list[dict[str
     ]
 
 
+def validate_engine_failover(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Validate v12 engine_failure_attempts entries against the last-run schema.
+
+    Each entry must name a known engine, a non-empty reason, and its context
+    field (`area` for per-area attempts, `checkpoint` for journey attempts).
+    Mirrors validate_evidence: the schema marks these fields required-when-
+    present, so an entry that exists but omits them contradicts the contract.
+    """
+    errors: list[dict[str, Any]] = []
+
+    def check(entries: Any, scope: str, owner: Any, context_field: str) -> None:
+        if not isinstance(entries, list):
+            return
+        for entry in entries:
+            if not isinstance(entry, dict):
+                errors.append({"code": "engine_failover_invalid", "scope": scope, "owner": owner, "field": "entry"})
+                continue
+            engine = entry.get("engine")
+            if engine not in ENGINE_VALUES:
+                errors.append({"code": "engine_failover_invalid", "scope": scope, "owner": owner, "field": "engine", "value": engine})
+            why = entry.get("why")
+            if not isinstance(why, str) or not why.strip():
+                errors.append({"code": "engine_failover_invalid", "scope": scope, "owner": owner, "field": "why"})
+            context = entry.get(context_field)
+            if context_field == "checkpoint":
+                if not (is_int(context) or (isinstance(context, str) and context.strip())):
+                    errors.append({"code": "engine_failover_invalid", "scope": scope, "owner": owner, "field": "checkpoint"})
+            elif not isinstance(context, str) or not context.strip():
+                errors.append({"code": "engine_failover_invalid", "scope": scope, "owner": owner, "field": context_field})
+
+    for area in payload.get("areas", []):
+        if isinstance(area, dict):
+            check(area.get("engine_failure_attempts"), "area", area.get("slug"), "area")
+    for journey in payload.get("journeys_run", []):
+        if isinstance(journey, dict):
+            check(journey.get("engine_failure_attempts"), "journey", journey.get("id"), "checkpoint")
+    return errors
+
+
 def validate_payload(payload: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     errors: list[dict[str, Any]] = []
     if not isinstance(payload, dict):
@@ -2334,6 +2379,7 @@ def validate_payload(payload: Any) -> tuple[list[dict[str, Any]], list[dict[str,
                     },
                 }
             )
+    errors.extend(validate_engine_failover(payload))
     if errors:
         return errors, []
 

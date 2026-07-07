@@ -31,11 +31,14 @@ Browser-call budget unit: one verb invocation. Any engine-internal snapshot,
 ref refresh, or selector read needed to perform that verb counts inside the
 verb. This keeps budgets comparable across Chrome MCP and agent-browser.
 
-Chrome cannot automate file uploads through `<input type="file">`. Use
-agent-browser for upload steps. Because engine atomicity forbids switching
-engines mid-area, an area containing an upload step must set
-`engine: agent-browser` in the test-file frontmatter rather than switching
-mid-run.
+Chrome cannot automate file uploads through `<input type="file">`; upload
+steps require agent-browser. Because engine atomicity forbids switching
+engines mid-area, a scenario whose areas include an upload step must run on
+agent-browser: leave `engine: ""` (the default engine is agent-browser) and do
+not set `engine: chrome` — `agent-browser` is not a settable frontmatter value,
+the default already selects it. If Chrome is nonetheless explicitly requested
+for such a scenario, the upload step cannot be automated; report the
+Chrome-incompatibility rather than switching engines mid-run.
 
 ## Engine Selection
 
@@ -183,7 +186,7 @@ During journeys and cross-area probe sequences, the default known-good action
 is a non-destructive current-tab read: `read-page`, or `evaluate` when the check
 needs structured DOM state. If that read fails:
 
-1. Mark the journey or sequence interrupted.
+1. Mark the journey or sequence interrupted (for a journey, set the attempt's `journeys_run` status to `interrupted`; commit writes no status or Run History for it).
 2. Open a fresh tab and run `navigate` to `app_url` as a second-stage
    discriminator.
 3. If fresh-tab navigation succeeds, attribute the original failure to the app:
