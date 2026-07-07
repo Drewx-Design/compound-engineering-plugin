@@ -136,7 +136,7 @@ The `compound-engineering` plugin currently ships 33 skills and 0 standalone age
 | [`/ce-worktree`](docs/skills/ce-worktree.md) | Ensure work happens in an isolated git worktree |
 | [`/ce-promote`](docs/skills/ce-promote.md) | Draft user-facing announcement copy |
 | [`/ce-test-browser`](docs/skills/ce-test-browser.md) | Run browser tests on PR-affected pages |
-| [`/ce-user-test`](docs/skills/ce-user-test.md) | Exploratory browser user testing with compounding test files |
+| [`/ce-user-test`](docs/skills/ce-user-test.md) | Exploratory browser user testing on agent-browser by default, with opt-in watchable Chrome |
 | [`/ce-user-test-iterate`](docs/skills/ce-user-test.md) | Run the same user test N times to measure consistency |
 | [`/ce-user-test-commit`](docs/skills/ce-user-test.md) | Commit user-test results from the last run |
 | [`/ce-user-test-eval`](docs/skills/ce-user-test.md) | Grade user-test output against binary evals |

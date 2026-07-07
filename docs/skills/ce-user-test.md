@@ -1,8 +1,8 @@
 # `ce-user-test`
 
-> Exploratory browser-based user testing with quality scoring and compounding test files — the user watches a visible Chrome window while the agent tests like a user.
+> Exploratory browser-based user testing with quality scoring and compounding test files — agent-browser runs by default, with opt-in watchable Chrome for real logged-in sessions.
 
-`ce-user-test` is the **exploratory user-testing** skill. It drives the app through a visible Chrome window (via the claude-in-chrome MCP), scores each functional area on a 1-5 UX rubric, and persists what it learns into a compounding test file: area maturity statuses, regression probes, queries, journeys, and run history. Each run records typed evidence for its scores and reconciles a per-run anomaly ledger before committing. Each run reads the accumulated state, targets the areas most worth testing (code-affected, surprising, or unproven), and writes back sharper probes for the next run. Three companion skills complete the loop: `ce-user-test-iterate` (run the same scenario N times to measure consistency), `ce-user-test-commit` (persist results from a `--no-commit` or interrupted run), and `ce-user-test-eval` (grade the skill's own output against binary evals).
+`ce-user-test` is the **exploratory user-testing** skill. It drives the app through the agent-browser CLI by default (headless, no Chrome dependency, WSL-supported), scores each functional area on a 1-5 UX rubric, and persists what it learns into a compounding test file: area maturity statuses, regression probes, queries, journeys, and run history. When you want to watch the run in your real logged-in browser session, opt into the Chrome engine via `engine: chrome` frontmatter or an explicit Chrome request. Each run records typed evidence for its scores and reconciles a per-run anomaly ledger before committing. Each run reads the accumulated state, targets the areas most worth testing (code-affected, surprising, or unproven), and writes back sharper probes for the next run. Three companion skills complete the loop: `ce-user-test-iterate` (run the same scenario N times to measure consistency), `ce-user-test-commit` (persist results from a `--no-commit` or interrupted run), and `ce-user-test-eval` (grade the skill's own output against binary evals).
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Question | Answer |
 |----------|--------|
-| What does it do? | Exploratory in-browser testing with per-area 1-5 scoring, regression probes, and a test file that compounds across runs |
+| What does it do? | Exploratory in-browser testing with per-area 1-5 scoring, regression probes, and a test file that compounds across runs; agent-browser is the default engine, with opt-in watchable Chrome |
 | When to use it | Testing app quality as a user would experience it; tracking UX maturity over time; catching regressions in areas that used to work |
 | What it produces | A dispatch-style session report, evidence-backed run artifacts, an updated test file (maturity map, probes, history), filed GitHub issues for functional failures |
 | Companions | `/ce-user-test-iterate` (N-run consistency), `/ce-user-test-commit` (standalone commit), `/ce-user-test-eval` (self-eval) |
@@ -68,13 +68,13 @@ Reach for `ce-user-test` when:
 - You're tracking quality over time — which areas are proven, degrading, or broken
 - A feature branch touched user-facing code and you want targeted exploratory coverage
 - You want regressions in previously-good areas caught automatically via probes
+- You want to use the default headless agent-browser path, or explicitly opt into watchable Chrome for a shared-login run
 
 Skip it when:
 
 - You want automated headless regression tests mapped from a PR's changed routes → use `/ce-test-browser`
 - The change is backend-only with no observable user-facing behavior
-- The claude-in-chrome MCP isn't available and the app has no CLI-testable surface
-- You're on WSL (Chrome integration unsupported there)
+- `agent-browser` is not installed yet → run `/ce-setup` first
 
 ---
 
@@ -90,12 +90,12 @@ Skip it when:
 
 Artifacts live in `tests/user-flows/`: the test file (committed), `score-history.json`, `bugs.md`, `test-history.md` (committed), and `.user-test-last-run.json` / `.user-test-last-report.md` / `.user-test-anomalies.jsonl` (gitignored ephemeral run state).
 
-Required: claude-in-chrome MCP connected (or full CLI coverage of scored areas). Optional: `gh` authenticated for issue filing.
+Required: `agent-browser` installed and available (run `/ce-setup` if needed). Optional: claude-in-chrome MCP for opt-in watchable shared-login Chrome mode; `gh` authenticated for issue filing.
 
 ---
 
 ## See Also
 
-- [`ce-test-browser`](./ce-test-browser.md) — sibling skill for automated headless E2E on PR-affected routes; `ce-user-test` is exploratory and watchable, `ce-test-browser` is regression-focused
+- [`ce-test-browser`](./ce-test-browser.md) — sibling skill for automated headless E2E on PR-affected routes; `ce-user-test` is exploratory by default and can opt into watchable Chrome, `ce-test-browser` is regression-focused
 - [`ce-dogfood`](./ce-dogfood.md) — hands-off diff-scoped browser QA with autonomous fixes
 - [`ce-debug`](./ce-debug.md) — take a filed `user-test:<area>` issue to root cause and fix
