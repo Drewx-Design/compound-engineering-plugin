@@ -23,7 +23,7 @@ After exploring each area, the skill runs a structural verification pass — ind
 
 Some verifications require a before/after pattern — read state, trigger
 an interaction, read state again. These cannot be batched into a single
-javascript_tool call. Run them AFTER the standard batch verification pass.
+`evaluate` verb. Run them AFTER the standard batch verification pass.
 
 | Interaction | Before | Action | After | Pass Condition |
 |-------------|--------|--------|-------|---------------|
@@ -52,38 +52,36 @@ Verification results, probe results, and UX scores are three separate signals �
 
 ## Batching Verification Reads
 
-Verification passes are read-only — they observe DOM state without interacting. All verification reads SHOULD use a single `javascript_tool` call that returns a JSON object with all checked claims.
+Verification passes are read-only — they observe DOM state without interacting. All verification reads SHOULD use a single `evaluate` verb that returns a JSON object with all checked claims. See [browser-engines.md](./browser-engines.md) for the engine-specific dispatch.
 
 **Pattern (replaces sequential find calls):**
 
 ```javascript
-mcp__claude-in-chrome__javascript_tool({
-  code: `JSON.stringify({
-    activeFilters: [...document.querySelectorAll('[data-filter-chip]')]
-      .map(c => ({ text: c.textContent, active: c.classList.contains('active') })),
-    resultCount: document.querySelectorAll('.product-card').length,
-    sampleResults: [...document.querySelectorAll('.product-card')]
-      .slice(0, 5).map(c => ({
-        title: c.querySelector('.title')?.textContent?.trim(),
-        price: c.querySelector('.price')?.textContent?.trim(),
-        condition: c.querySelector('[data-condition]')?.textContent?.trim(),
-        category: c.querySelector('[data-category]')?.textContent?.trim()
-      }))
-  })`
+JSON.stringify({
+  activeFilters: [...document.querySelectorAll('[data-filter-chip]')]
+    .map(c => ({ text: c.textContent, active: c.classList.contains('active') })),
+  resultCount: document.querySelectorAll('.product-card').length,
+  sampleResults: [...document.querySelectorAll('.product-card')]
+    .slice(0, 5).map(c => ({
+      title: c.querySelector('.title')?.textContent?.trim(),
+      price: c.querySelector('.price')?.textContent?.trim(),
+      condition: c.querySelector('[data-condition]')?.textContent?.trim(),
+      category: c.querySelector('[data-category]')?.textContent?.trim()
+    }))
 })
 ```
 
-This replaces 5+ individual MCP calls with 1. At ~2-3s per MCP round trip, saves 8-12s per area.
+This replaces 5+ individual browser calls with 1. At ~2-3s per browser verb, saves 8-12s per area.
 
 **When to use individual calls instead:**
 - DOM structure unknown (first run, no selectors documented)
-- javascript_tool fails (fall back per Graceful Degradation rules)
+- `evaluate` fails (fall back per Graceful Degradation rules in [browser-engines.md](./browser-engines.md))
 - Verification requires interaction (clicking to reveal hidden state)
 
 **Selector discovery:** On first run, the agent discovers selectors during exploration. Document working selectors in the area's `**verify:**` block so subsequent runs can batch directly. Example:
 
 ```markdown
-**verify:** Apply a category filter. Batch-check via javascript_tool:
+**verify:** Apply a category filter. Batch-check via `evaluate`:
 activeFilters (`[data-filter-chip]`), resultCount (`.product-card`),
 sample 5 results (`.product-card .title`, `.condition-badge`).
 Every result's category must match the filter.
@@ -93,21 +91,21 @@ Every result's category must match the filter.
 
 Selectors compound: by run 3, most verification passes are single-call batched reads because the selectors were discovered in runs 1-2.
 
-**Failure handling:** A batch failure increments `disconnect_counter` once (it is an MCP tool failure). Area gets `verification_results: null`. Retry with individual calls before recording skip_reason.
+**Failure handling:** A batch failure follows the engine recovery rules in [browser-engines.md](./browser-engines.md). If it is attributed to the active engine, record the failed `evaluate` verb and engine once. Area gets `verification_results: null`. Retry with individual browser calls before recording skip_reason.
 
 ## Disconnect Pattern Tracking
 
-When `disconnect_counter` increments, record the context: which MCP tool was called, which area was being tested, and the session MCP call count.
+When `disconnect_counter` increments, record the context: failed verb, active engine, area or sequence under test, and the session browser-call count.
 
-At run end, if `disconnect_counter >= 3`, append a disconnect analysis:
+At run end, append a disconnect analysis when [browser-engines.md](./browser-engines.md) says the threshold is met:
 
 ```
 Disconnects: 10
-  Pattern: 7/10 after javascript_tool calls
-  Cluster: 6/10 after MCP call #15+
+  Pattern: 7/10 after chrome evaluate verbs
+  Cluster: 6/10 after browser call #15+
   Worst area: agent/search-query (4 disconnects)
-  Suggestion: Extension unstable under sustained javascript_tool use.
-              Consider browser restart between iterate runs.
+  Suggestion: Chrome extension unstable under sustained evaluate use.
+              Consider the configured recovery path before the next run.
 ```
 
 **Schema in .user-test-last-run.json:**
@@ -116,13 +114,13 @@ Disconnects: 10
 "disconnects": {
   "count": 10,
   "contexts": [
-    { "call_number": 18, "tool": "javascript_tool", "area": "agent/search-query" },
-    { "call_number": 22, "tool": "click", "area": "browse/filters" }
+    { "call_number": 18, "engine": "chrome", "verb": "evaluate", "area": "agent/search-query" },
+    { "call_number": 22, "engine": "chrome", "verb": "click", "area": "browse/filters" }
   ]
 }
 ```
 
-This data compounds: after 3+ sessions, patterns emerge (e.g., "always after 20+ MCP calls" → connection fatigue, restart between runs).
+This data compounds: after 3+ sessions, patterns emerge (e.g., "always after 20+ browser calls" → connection fatigue, recovery between runs).
 
 ## verify: Blocks
 
@@ -132,7 +130,7 @@ When to add a verify block: any area with a filter, search result set, count, so
 
 ## Selector Discovery and Writeback
 
-Commit mode persists selectors from each area's payload `confirmed_selectors` into that area's `**verify:**` block. This is the highest-leverage writeback: run 1 discovers selectors through sequential trial (3-5 MCP calls), run 2 reads the verify block and batches them into one `javascript_tool` call.
+Commit mode persists selectors from each area's payload `confirmed_selectors` into that area's `**verify:**` block. This is the highest-leverage writeback: run 1 discovers selectors through sequential trial (3-5 browser calls), run 2 reads the verify block and batches them into one `evaluate` verb.
 
 ### Rules
 
@@ -147,7 +145,7 @@ Commit mode persists selectors from each area's payload `confirmed_selectors` in
 
 ```markdown
 **verify:**
-- Apply filter. Batch-check via javascript_tool:
+- Apply filter. Batch-check via `evaluate`:
   activeFilters (`[data-filter-chip]`), resultCount (`.product-card`),
   sample 5 results (`.product-card .title`, `.condition-badge`).
   Every result's attribute must match the active filter.

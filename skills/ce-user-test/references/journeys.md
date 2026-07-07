@@ -41,19 +41,21 @@ Each journey lives in the test file's `## Journeys` section:
 
 | Type | Example | How to check |
 |------|---------|-------------|
-| Result state | "Results include matching items" | javascript_tool read of first 3 results |
+| Result state | "Results include matching items" | `evaluate` read of first 3 results |
 | Count change | "Counter increments by 1" | Read element, compare to pre-action value |
 | Element present | "Details match listing" | Check 2-3 attributes match between views |
 | State clean | "No stale filters from prior steps" | Read active state, verify none from prior steps |
 | No check | `---` | Skip verification (use sparingly) |
 
-Checkpoints are 1 MCP call each (batched `javascript_tool`). For "Count change" checkpoints, read the target element BEFORE executing the step's Action to capture the baseline — this adds 1 MCP call per count-change step. A 5-step journey = ~10-15 MCP calls (5 actions + 5 checkpoint reads + pre-reads for count-change steps). Journey MCP calls are separate from per-area budgets.
+Checkpoints are 1 browser call each (batched `evaluate`). For "Count change" checkpoints, read the target element BEFORE executing the step's Action to capture the baseline — this adds 1 browser call per count-change step. A 5-step journey = ~10-15 browser calls (5 actions + 5 checkpoint reads + pre-reads for count-change steps). Journey browser calls are separate from per-area budgets.
 
 ## Execution
 
 **Phase 3 order:** (1) Cross-area probes, (2) Journeys, (3) Per-area testing.
 
 **Inter-journey reset:** Navigate to the app's entry URL between journeys. Each journey starts from clean navigation state. Within a journey, no resets between steps.
+
+**Engine atomicity:** Run a journey on one browser engine from step 1 through completion. If an engine failure interrupts the journey at any checkpoint, record that attempt as interrupted, fail over per [browser-engines.md](./browser-engines.md), then re-run the whole journey from checkpoint 1 on the new engine. Keep the interrupted attempt in `journeys_run` alongside the re-run; it is calibration-relevant and feeds `engine_failure_attempts`.
 
 **Execution order when multiple journeys exist:**
 1. `failing-at-N` (highest signal) — always run
@@ -137,13 +139,13 @@ Sources 2-4 generate suggestions requiring user confirmation.
 
 **Graduation:** Does NOT apply to journeys. Journeys are multi-step browser flows that cannot be reduced to a single CLI call. Stable journeys remain as browser-only spot-checks.
 
-**Per-area MCP budgets:** Journey calls are separate. Visiting an area in a journey does not consume its per-area budget.
+**Per-area browser-call budgets:** Journey calls are separate. Visiting an area in a journey does not consume its per-area budget.
 
 **`--no-commit`:** Journey results recorded in `.user-test-last-run.json` regardless. Status in test file only updated during commit. No-commit runs don't count toward escalation.
 
 **Iterate mode:** Each iteration counts as a separate run for journey Run History. Stable "every other run" applies per iteration.
 
-**Partial run safety:** Interrupted journeys discarded. Only fully-completed journeys have status written during commit.
+**Partial run safety:** Interrupted engine-failure attempts are kept in `journeys_run`, but only fully-completed journeys have status written during commit.
 
 ## Report Format
 

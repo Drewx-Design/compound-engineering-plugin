@@ -13,17 +13,17 @@ narrowing — work together to focus testing time where it has the most impact.
 
 ### Proven Area Budget by Stability
 
-| Consecutive Passes | Browser MCP Budget |
+| Consecutive Passes | Browser-Call Budget |
 |---|---|
-| 2-5 | 3 calls |
-| 6-9 | 2 calls |
-| 10+ | 1 call |
+| 2-5 | 3 browser calls |
+| 6-9 | 2 browser calls |
+| 10+ | 1 browser call |
 
 Failing/untested probes remain uncapped at all tiers. The tier only constrains passing probe spot-checks and exploration calls. Tier resets on demotion from Proven (consecutive pass count returns to 0). Stable queries (CLI-only) and cross-area probes are not constrained by per-area budgets.
 
-At the 1-call tier, the single call may be used for probe spot-check OR novelty -- the mandatory novelty probe rule is waived when the budget is 1 call.
+At the 1-browser-call tier, the single call may be used for probe spot-check OR novelty -- the mandatory novelty probe rule is waived when the budget is 1 browser call.
 
-Freed calls redistribute to novelty budget and areas with active variance. N = sum of (3 - tier_budget) across all Proven areas tested this run. Report in SIGNALS: "+ N calls freed from ultra-stable areas."
+Freed browser calls redistribute to novelty budget and areas with active variance. N = sum of (3 - tier_budget) across all Proven areas tested this run. Report in SIGNALS: "+ N browser calls freed from ultra-stable areas."
 4. **Known-bug areas:** Check if the linked issue is resolved before skipping:
    - If `gh` not authenticated: skip as normal
    - Run `gh issue view <issue-number> --json state -q '.state'`
@@ -91,7 +91,7 @@ After run K completes, classify each area for run K+1:
 
 **SKIP** — Area scored ≥ 4 with 0 probe failures AND 0 verification mismatches in run K. No browser testing in run K+1. Note in report: "Skipped (stable in R{K})". CLI queries still run as a lightweight quality check (see D4 in plan). Failing/untested probes still execute if any exist — the probe uncap rule is not overridden by SKIP.
 
-**PROBES-ONLY** — Area scored ≥ 4 but has active failing/flaky probes. Execute ALL probes (failing, untested, AND passing as spot-checks) in run K+1 plus 1 exploration MCP call. No broad exploration beyond that.
+**PROBES-ONLY** — Area scored ≥ 4 but has active failing/flaky probes. Execute ALL probes (failing, untested, AND passing as spot-checks) in run K+1 plus 1 exploration browser call. No broad exploration beyond that.
 
 **FULL** — Area scored ≤ 3, OR had a verification mismatch, OR has a newly injected probe from run K, OR is the target of an Explore Next Run P1 item. Full exploration in run K+1 with injected probes.
 
@@ -99,7 +99,7 @@ After run K completes, classify each area for run K+1:
 1. Git-diff `(verify)` → FULL (always)
 2. Explicit user override → FULL (all areas)
 3. This classification (SKIP/PROBES-ONLY/FULL)
-4. Proven tiered-MCP budget (R1 or N=1 only)
+4. Proven tiered browser-call budget (R1 or N=1 only)
 
 Time freed from SKIP areas redistributes to FULL areas. This makes R2 systematically different from R1 — it pushes on weakness, not uniformity.
 

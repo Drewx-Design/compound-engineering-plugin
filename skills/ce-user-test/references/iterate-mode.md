@@ -31,6 +31,10 @@ The `execution_index` counter is run-global: initialize it once before iteration
 
 **CLI-only mode:** If all areas have `prechecks` tags and CLI covers everything, skip steps 2-4 entirely — no browser needed for that run.
 
+**Engine choice across runs:** Select the browser engine once at session start. If failover or the one-time reverse switch changes the active engine, that choice persists for all remaining areas and remaining runs in the N-run session. Do not re-select the original engine at the next iteration and repeat the same failure threshold.
+
+**Between-run reset by engine:** Chrome resets by navigating to the app entry URL as a full page reload; if this reset is standing in for a proactive restart, reset the Chrome browser-call counter. agent-browser resets by navigating to the app entry URL in the same persistent profile/session; it has no browser-call counter and no proactive reload. Apply the reset for whichever engine is active after any failover.
+
 **CLI command with side effects:** If the CLI command writes to a database or calls external APIs, each iteration may produce different results due to accumulated state. Document this in the test file's area details when relevant.
 
 **Known limitations — not cleared by page reload:**
@@ -56,11 +60,13 @@ This reduces Phase 1 from ~3 minutes to ~1 minute for run 2+.
 
 ## Partial Run Handling
 
-If a disconnect occurs mid-iterate (e.g., on run 3 of 5):
+If both browser engines fail mid-iterate (e.g., on run 3 of 5):
 - Write results for completed runs (runs 1-2)
 - Report "Completed 2 of 5 runs"
 - Partial results are valid — maturity updates apply to completed runs only
 - Do NOT produce committable output for incomplete runs
+
+A Chrome disconnect threshold by itself does not abort iterate mode; it follows the failover path in [browser-engines.md](./browser-engines.md). The partial-run trigger is the terminal state where both engines are unavailable, declined, or already consumed.
 
 ## Output Format
 
